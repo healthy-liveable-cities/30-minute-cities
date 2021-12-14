@@ -2,6 +2,7 @@
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(sf)
 
 aggregateData <-function(df,binwidth) {
   df <- df %>%
@@ -156,11 +157,11 @@ pop_total <- bind_rows(
   mutate(city=factor(city,levels=city_labels,labels=city_labels))
 write.csv(pop_total, "data-output/pop_total.csv", row.names=F)
 
-df=census_distances
-range_min=3.5
-range_max=29.5
-source_spacing=1
-target_spacing=0.5
+# df=census_distances
+# range_min=3.5
+# range_max=29.5
+# source_spacing=1
+# target_spacing=0.5
 expandRange <- function(df,range_min,range_max,source_spacing,target_spacing=1) {
   offset_value <- (source_spacing/2) - (target_spacing/2)
   df %>%
@@ -172,8 +173,7 @@ expandRange <- function(df,range_min,range_max,source_spacing,target_spacing=1) 
     mutate(count=count/(source_spacing/target_spacing)) %>%
     dplyr::select(-offset)
 }
-
-test <- expandRange(census_distances,3.5,29.5,1,0.5)
+# test <- expandRange(census_distances,3.5,29.5,1,0.5)
 
 census_distances_expanded <- bind_rows(
   expandRange(census_distances,0.25,2.75,0.5,0.25),
@@ -226,6 +226,8 @@ SA1_centroids <- SA1 %>%
   st_transform(7845) %>%
   st_centroid(.)
 
+study_regions <- st_read("data-input/ntnl_li_australia_study_regions_epsg7845.sqlite")
+
 SA1_study_regions <- st_join(study_regions, SA1_centroids, prepared=TRUE,
                              sparse=TRUE, left=TRUE) %>%
   st_drop_geometry()
@@ -265,7 +267,7 @@ mode_shift <- census_times %>%
                      levels=c("walk","bike","pt","car"),
                      labels=c("Walking","Cycling","Public transport","Driving")))
 
-job_shift <- read.csv(gzfile("./data-output/flowAll.csv"),as.is=T) %>%
+job_shift <- read.csv(gzfile("./data-output/flowAll.csv.gz"),as.is=T) %>%
   inner_join(cities_SA1, by=c("origin"="SA1_MAINCO")) %>%
   mutate(time=time_secs/60) %>%
   dplyr::select(city,mode,origin,destination,count,time) %>%
@@ -313,7 +315,7 @@ summaryTableOutput <- summaryTable %>%
                 baseline_Cycling,modeshift_Cycling,jobshift_Cycling,
                 "baseline_Public transport","modeshift_Public transport","jobshift_Public transport",
                 baseline_Driving,modeshift_Driving,jobshift_Driving
-                )
+  )
 write.csv(summaryTableOutput, "results/summaryTableOutput.csv", row.names=F)
 
 # plot interventions ------------------------------------------------------
@@ -341,14 +343,14 @@ australia <- bind_rows(
   aggregateData(job_shift,bw) %>% filter(city=="Australia") %>% mutate(intervention="jobshift")
 ) %>%
   mutate(intervention=factor(intervention,
-                     levels=c("noshift","modeshift","jobshift"),
-                     labels=c("Baseline (a)","Mode shift (b)","Job-worker shift (c)"))) %>%
+                             levels=c("noshift","modeshift","jobshift"),
+                             labels=c("Baseline (a)","Mode shift (b)","Job-worker shift (c)"))) %>%
   group_by(intervention,mode,time) %>%
   summarise(count=sum(count,na.rm=F)) %>%
   ungroup()
 
 
-  
+
 library(scales)
 
 australia_tmp <- bind_rows(
@@ -488,8 +490,8 @@ summaryTableLong <- summaryTable %>%
                values_to="percent") %>%
   mutate(percent=percent/100) %>%
   mutate(measure=factor(measure,
-                     levels=c("jobshift_percent","modeshift_percent","noshift_percent"),
-                     labels=c("Job Shift","Mode Shift","No Shift"))) %>%
+                        levels=c("jobshift_percent","modeshift_percent","noshift_percent"),
+                        labels=c("Job Shift","Mode Shift","No Shift"))) %>%
   inner_join(city_type,by="city") %>%
   mutate(city=factor(city,levels=rev(city_labels),labels=rev(city_labels))) %>%
   arrange(city) %>%
@@ -513,7 +515,7 @@ ggplot(summaryTableLong, aes(x=percent,y=city)) +
         panel.spacing.x = unit(1.5, "lines"),
         panel.grid.major = element_line(size=0.3),
         panel.grid.minor = element_blank())
-        # plot.margin=unit(c(0.1,0.5,0,0.1), "cm")) #top, right, bottom, left
+# plot.margin=unit(c(0.1,0.5,0,0.1), "cm")) #top, right, bottom, left
 ggsave("results/interventions.pdf",width=8,height=6)
 
 # attempt at rotation
